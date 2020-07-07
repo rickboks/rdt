@@ -1,0 +1,205 @@
+#!/bin/bash
+source "$RDT_DIR/config"
+output_dir="/tmp/rdt"
+download_dir=
+session_string="$RANDOM$RANDOM$RANDOM$RANDOM"
+scope="read"
+
+ydl_download(){
+	local title="$2"
+	timeout "$timeout" youtube-dl --max-filesize 1000m -q -o "${download_dir}/${title}" "$1" 2> /dev/null
+	return $?
+}
+
+num(){
+	[ -z "$1" ] && echo "0" || wc -l <<< "$1"
+}
+
+download_urls(){
+	IFS=$'\n' read -r -d '' -a img_titles <<< "$(jq -r ".title" <<< "$1")"
+	img_urls="$(jq -r -c ".urls" <<< "$1")"
+
+	local num=${#img_titles[@]}
+	for ((i=0;i<num;i++)); do
+		echo -ne "> $((i+1))/$num\r"
+		local filename="$RANDOM-$RANDOM-$RANDOM"
+		echo "${filename};${img_titles[i]}" >> "${download_dir}/titles.dat"
+
+		local urls=$(sed -n $((i+1))p <<< "$img_urls")
+		urls=$(jq -r '.[]' <<< "$urls")
+
+		succeeded=0
+		IFS=$'\n'; while read -r url; do
+			case "$2" in 
+				wget)
+					wget -q -O "${download_dir}/$filename" "$url"
+					[ $? -eq 0 ] && succeeded=1 && break 
+				;;
+				*)
+					download_url "$url" "$filename"
+					[ $? -eq 0 ] && succeeded=1 && break
+				;;
+			esac
+		done <<< $urls
+
+		[ $succeeded -eq 0 ] && echo "FAILED:" && echo "$urls" && echo "---"
+	done
+}
+
+download_url (){
+	local url="$1"
+	local title="$2"
+
+	case "$url" in
+	https://gfycat.com*)
+		download_gfycat "$url" "$title"
+	;;
+
+	*)
+		ydl_download "$url" "$title"
+	;;	
+	esac
+
+	return $?
+}
+
+download_gfycat(){
+	local url="$1"
+	local title="$2"
+	if ! ydl_download "$url" "$title"; then
+		redgifs_url="$(get_redgifs_mp4_url "$url")"
+		ydl_download "$redgifs_url" "$title"
+		return $?
+	fi
+
+	return 0 
+}
+
+get_redgifs_mp4_url() {
+	local url="$1"
+	local id=${url##*\/}
+	url=$(curl "https://api.redgifs.com/v1/gfycats/$id" 2> /dev/null | jq -r ".gfyItem.mp4Url")
+	echo "$url"
+}
+
+auth(){
+	local auth_url="https://www.reddit.com/api/v1/authorize\
+		?client_id=${client_id}&response_type=code&state=${session_string}\
+		&redirect_uri=${redirect_uri}&duration=permanent&scope=${scope}"
+
+	eval "$browser \"$auth_url\""
+}
+
+get_token(){
+	access_token="$(jq -r ".access_token" <<< $temp)"
+	token_type="$(jq -r ".token_type" <<< $temp)"
+}
+
+download_next_page(){
+	download_dir="$output_dir/$1"
+	rm -rf ${download_dir}/*
+
+	local get_posts_url="https://oauth.reddit.com/r/${subreddit}/${listing}?raw_json=1&limit=${limit}"
+	[ "$listing" = "top" -o "$listing" = "controversial" ] && get_posts_url="$get_posts_url&t=${period}"
+
+	[ -f "$output_dir/after.tmp" ] && after=$(<"$output_dir/after.tmp") || after=""
+	[ -n "$after" ] && get_posts_url="${get_posts_url}&after=$after"
+
+	local json=$(curl -s -S -H "Authorization: ${token_type} ${access_token}" -A "${user_agent}" "$get_posts_url")
+
+	local auth_error=$(jq -r ".error" <<< "$json")
+	if [ "$auth_error" != "null" ]; then
+		echo "Authentication error: $auth_error"
+		exit
+	fi
+
+	posts=$(jq -r ".data.children[].data | del (.all_awardings)" <<< "$json")
+	#echo "$posts" | jq -C "." |less && exit
+	jq -r ".data.after" <<< "$json" > "$output_dir/after.tmp"
+
+	local images=$(jq -c -r ". | 
+		select ( .post_hint == \"image\" ) | {title: .title,
+			urls: [
+			(if  .preview.images[].variants.mp4.source.url then
+			 .preview.images[].variants.mp4.source.url 
+			elif .preview.images[].variants.gif.source.url then
+			 .preview.images[].variants.gif.source.url 
+			else .preview.images[].source.url end)
+				]} " <<< "$posts")
+
+	local hosted_videos=$(jq -c -r ". | 
+		select ( .post_hint == \"hosted:video\" ) | {title: .title,
+			urls: [(\"https://reddit.com/\" + .id)] }" <<< "$posts")
+
+	local rich_videos=$(jq -c -r ". | 
+		select ( .post_hint == \"rich:video\" ) | {title: .title,
+			urls: ([
+					(if .preview.reddit_video_preview.fallback_url then (\"https://reddit.com/\" + .id) else null end),
+					.url
+					] | map(select(.!= null)))
+			 }" <<< "$posts")
+
+	local links=$(jq -c -r ". | 
+		select ( .post_hint == \"link\" )| {title: .title, 
+			urls: [
+			( if .preview.reddit_video_preview.fallback_url then
+					(\"https://reddit.com/\" + .id)
+				elif (.url | test(\"https?://imgur.com\")) and .preview.images[].source.url then
+					 .preview.images[].source.url
+				else
+					 .url end)]}" <<< "$posts")
+
+	echo "Downloading $(num "$images") images ..."; download_urls "$images" "wget"
+	echo "Downloading $(num "$hosted_videos") hosted videos ..."; download_urls "$hosted_videos" "ydl"
+	echo "Downloading $(num "$rich_videos") rich videos ..."; download_urls "$rich_videos" "ydl"
+	echo "Downloading $(num "$links") links ..."; download_urls "$links" "ydl"
+	echo "Done downloading page."
+}
+
+trap "exit" INT TERM
+trap "kill 0" EXIT
+
+[ \( -n "$1" \) -a \( "$1" = "auth" \) ] && auth && exit
+[ \( -n "$1" \) ] && subreddit="$1" || subreddit="$(cat "${RDT_DIR}/subs" | dmenu)"
+
+listing="$(printf 'hot\nnew\nrising\ntop\ncontroversial' | dmenu)"
+if [ "$listing" = top -o "$listing" = "controversial" ]; then
+		period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
+fi
+
+echo "Getting authentication token ..."
+temp=$(curl -X POST -d "grant_type=password&username=${username}&password=${password}"\
+	--user "${client_id}:${client_sec}" -A "${user_agent}" https://www.reddit.com/api/v1/access_token 2> /dev/null)
+
+auth_error=$(jq -r ".error" <<< "$temp")
+if [ "$auth_error" != "null" ]; then
+	echo "Authentication error: $auth_error"
+	exit
+fi
+
+get_token
+
+rm -rf "$output_dir"
+mkdir -p "$output_dir/current"
+mkdir -p "$output_dir/next"
+
+echo "Downloading buffer of ${limit} items."
+download_next_page "current"
+done=false
+
+while [ "$done" = false ]; do
+	download_next_page "next"&
+	mpv_output=$(python "$RDT_DIR/mpv-rdt.py" "$output_dir/current" "$save_dir" | tail -1) 
+
+	case "$mpv_output" in 
+	quit)
+		kill $(jobs -p) &>/dev/null
+		done=true
+		echo "Exiting." && exit
+		;;
+	esac
+	wait
+
+	rm $output_dir/current/*
+	mv $output_dir/next/* "$output_dir/current"
+done
