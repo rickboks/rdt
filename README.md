@@ -8,6 +8,7 @@ rdt is a Bash script that downloads media from your favorite subreddits and lets
 - [python-mpv](https://github.com/jaseg/python-mpv)
 - [youtube-dl](https://github.com/ytdl-org/youtube-dl)
 - [curl](https://github.com/curl/curl)
+- [jq](https://github.com/stedolan/jq)
 
 ## Installation
 
