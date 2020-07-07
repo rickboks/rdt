@@ -42,7 +42,7 @@ download_urls(){
 			esac
 		done <<< $urls
 
-		[ $succeeded -eq 0 ] && echo "FAILED:" && echo "$urls" && echo "---"
+		[ $succeeded -eq 0 ] && echo "FAILED: ${img_titles[i]}"
 	done
 }
 
@@ -114,7 +114,6 @@ download_next_page(){
 	fi
 
 	posts=$(jq -r ".data.children[].data | del (.all_awardings)" <<< "$json")
-	#echo "$posts" | jq -C "." |less && exit
 	jq -r ".data.after" <<< "$json" > "$output_dir/after.tmp"
 
 	local images=$(jq -c -r ". | 
@@ -200,6 +199,6 @@ while [ "$done" = false ]; do
 	esac
 	wait
 
-	rm $output_dir/current/*
+	rm -f $output_dir/current/*
 	mv $output_dir/next/* "$output_dir/current"
 done
