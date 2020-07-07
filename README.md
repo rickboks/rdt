@@ -39,8 +39,7 @@ Action | Key
 -------|-----
 next post | j
 previous post | k
+show post title | t
+save media | s
 next page | n
 quit | q
-save media | s
-
-
