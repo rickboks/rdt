@@ -1,5 +1,5 @@
 #!/bin/bash
-source "$RDT_DIR/config"
+source "$RDT_DIR/config" || exit
 output_dir="/tmp/rdt"
 download_dir=
 session_string="$RANDOM$RANDOM$RANDOM$RANDOM"
