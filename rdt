@@ -78,7 +78,7 @@ download_gfycat(){
 get_redgifs_mp4_url() {
 	local url="$1"
 	local id=${url##*\/}
-	url=$(curl "https://api.redgifs.com/v1/gfycats/$id" 2> /dev/null | jq -r ".gfyItem.mp4Url")
+	url=$(curl "https://api.redgifs.com/v1/gfycats/$id" 2> /dev/null | jq -r ".gfyItem.webmUrl")
 	echo "$url"
 }
 
