@@ -11,7 +11,8 @@ player= mpv.MPV(input_default_bindings=True,
         image_display_duration="inf", 
         loop_file="inf", 
         fullscreen=True, 
-        osc=True)
+        osc=True,
+        shuffle=True)
 
 files=os.listdir(path)
 titlefile=open(path + "/titles.dat")

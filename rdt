@@ -107,9 +107,9 @@ download_next_page(){
 
 	local json=$(curl -s -S -H "Authorization: ${token_type} ${access_token}" -A "${user_agent}" "$get_posts_url")
 
-	local auth_error=$(jq -r ".error" <<< "$json")
-	if [ "$auth_error" != "null" ]; then
-		echo "Authentication error: $auth_error"
+	local error=$(jq -r ".error" <<< "$json")
+	if [ "$error" != "null" ]; then
+		echo "Error: $error"
 		exit
 	fi
 
@@ -158,6 +158,7 @@ download_next_page(){
 trap "exit" INT TERM
 trap "kill 0" EXIT
 
+[ ! -d "$save_dir" ] && mkdir "$save_dir"
 [ \( -n "$1" \) -a \( "$1" = "auth" \) ] && auth && exit
 [ \( -n "$1" \) ] && subreddit="$1" || subreddit="$(cat "${RDT_DIR}/subs" | dmenu)"
 
