@@ -22,6 +22,7 @@ You have to tell rdt where its files are located. Put this in your .bashrc (or .
 ```
 export RDT_DIR=/path/to/rdt
 ```
+Note that ```/path/to/rdt``` should be the path to the **directory**, not the script.
 You might also want to put rdt in your PATH. Now, fill in all the fields in the ```config``` file.
 Once that's done, authenticate the script to use your Reddit account. This only needs to be done once.
 
@@ -34,7 +35,13 @@ Now, you should be ready to use rdt. You can optionally add/remove entries in th
 ./rdt
 ```
 ... and dmenu shows you the subreddits you have specified in the ```subs``` file. It will additionally ask you how to sort the posts (hot, new, top, etc.).
-The inital buffering may take a second, depending on the size of the media to be downloaded, but the following pages will always be downloaded in the background. The keybindings for the mpv viewer are:
+The inital buffering may take a second, depending on the size of the media to be downloaded, but the following pages will always be downloaded in the background.
+
+To directy select the subreddit without dmenu, run:
+```
+./rdt <subreddit>
+```
+The keybindings for the mpv viewer are:
 
 Action | Key
 -------|-----
