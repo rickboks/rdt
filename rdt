@@ -22,7 +22,7 @@ download_urls(){
 	local num=${#img_titles[@]}
 	for ((i=0;i<num;i++)); do
 		echo -ne "> $((i+1))/$num\r"
-		local filename="$RANDOM-$RANDOM-$RANDOM"
+		local filename="$RANDOM-$RANDOM-$RANDOM-$RANDOM"
 		echo "${filename};${img_titles[i]}" >> "${download_dir}/titles.dat"
 
 		local urls=$(sed -n $((i+1))p <<< "$img_urls")

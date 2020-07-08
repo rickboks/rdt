@@ -36,17 +36,17 @@ def save_file():
 def player_next():
     try:
         player.playlist_next()
-        player.command("show-text", "", 1)
+        show_text("", 1)
     except:
-        pass
+        show_text("Press n to go to next page", 1)
 
 @player.on_key_press('k')
 def player_prev():
     try:
         player.playlist_prev()
-        player.command("show-text", "", 1)
+        show_text("", 1)
     except:
-        pass
+        show_text("Reached first post", 1)
 
 @player.on_key_press('n')
 def next_page():
@@ -67,11 +67,14 @@ def close():
     player.playlist_clear()
     player.playlist_next(mode='force')
 
+def show_text(text, duration):
+    player.command("show-text", text, duration*1000)
+
 @player.on_key_press('t')
 def display_title():
     current_filename=player.playlist_filenames[player.playlist_pos]
     current_id=current_filename.split("/")[-1].split(".")[0]
-    player.command("show-text", "{}".format(titles[current_id]), 5*1000)
+    show_text("{}".format(titles[current_id]), 5)
 
 read_titles()
 for f in files:
