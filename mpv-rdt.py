@@ -17,7 +17,6 @@ player= mpv.MPV(input_default_bindings=True,
 files=os.listdir(path)
 titlefile=open(path + "/titles.dat")
 titles={}
-current_filename=""
 
 def read_titles():
     for line in titlefile:
@@ -30,7 +29,7 @@ def save_file():
     if not os.path.exists(download_dir) or not os.path.isdir(download_dir):
         player.command("show-text", "Invalid directory: {}".format(download_dir), 1*1000)
         return
-    copy(current_filename, download_dir)
+    copy(player.playlist_filenames[player.playlist_pos], download_dir)
     player.command("show-text", "Saved file to {}".format(download_dir), 1*1000)
 
 @player.on_key_press('j')
@@ -70,6 +69,8 @@ def close():
 
 @player.on_key_press('t')
 def display_title():
+    current_filename=player.playlist_filenames[player.playlist_pos]
+    current_id=current_filename.split("/")[-1].split(".")[0]
     player.command("show-text", "{}".format(titles[current_id]), 5*1000)
 
 read_titles()
@@ -79,7 +80,5 @@ for f in files:
 
 player.playlist_pos=0
 while len(player.playlist) != 0 and player.playlist_pos != None:
-    current_filename=player.playlist_filenames[player.playlist_pos]
-    current_id=current_filename.split("/")[-1].split(".")[0]
     player.wait_for_playback()
 player.terminate()
