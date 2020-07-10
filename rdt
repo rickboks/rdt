@@ -4,7 +4,7 @@ download_dir=
 session_string="$RANDOM$RANDOM$RANDOM$RANDOM"
 output_dir="/tmp/rdt/$session_string"
 scope="read"
-pidfile="$output_dir/pidfile"
+success_file="$output_dir/success"
 
 ydl_download(){
 	local title="$2"
@@ -21,25 +21,27 @@ download_urls(){
 	all_urls="$(jq -r -c ".urls" <<< "$1")"
 	local num=${#all_titles[@]}
 
+	: > "$success_file"
+
 	for ((i=0;i<num;i++)); do
 		local filename="$RANDOM-$RANDOM-$RANDOM-$RANDOM"
 		echo "${filename};${all_titles[i]}" >> "${download_dir}/titles.dat"
 		local urls=$(sed -n $((i+1))p <<< "$all_urls")
 		urls=$(jq -r '.[]' <<< "$urls")
-		succeeded=0
 		IFS=$'\n'; while read -r url; do
 			case "$2" in 
 				wget)
 					wget -q -O "${download_dir}/$filename" "$url"
-					[ $? -eq 0 ] && succeeded=1 && break ;;
+					[ $? -eq 0 ] && echo "$i" >> "$success_file" && break ;;
 				*)
 					download_url "$url" "$filename" 
-					[ $? -eq 0 ] && succeeded=1 && break ;;
+					[ $? -eq 0 ] && echo "$i" >> "$success_file" && break ;;
 			esac
 		done <<< $urls &  # This for-loop is run in the background
-		echo "$!" >> "$pidfile" # Write pid to file so we can kill it later, if neccesary
 	done
 	wait
+
+	echo "successful downloads: $(cat $success_file | wc -l)"
 }
 
 download_url (){
@@ -162,8 +164,8 @@ prepare_directories(){
 
 cleanup() {
 	echo "Cleaning up ..."
-	[ -n "$buffer_pid" ] && kill -9 "$buffer_pid" &>/dev/null
-	cat "$pidfile" | xargs kill -9 &>/dev/null
+	pids=$(pgrep -g0 | grep -v $$)
+	kill $pids &>/dev/null
 	rm -r $output_dir
 }
 
@@ -203,12 +205,10 @@ prepare_directories
 
 echo "Downloading buffer of ${limit} items."
 download_next_page "current"
-: > "$pidfile"
 
 done=false
 while [ "$done" = false ]; do
 	download_next_page "next" &
-	buffer_pid="$!"
 	mpv_output=$(python "$RDT_DIR/mpv-rdt.py" "$output_dir/current" "$save_dir" | tail -1) 
 
 	if [ "$mpv_output" = "quit" ]; then
@@ -218,9 +218,6 @@ while [ "$done" = false ]; do
 	fi
 
 	wait
-
-	: > "$pidfile"
-	buffer_pid=""
 
 	rm -f $output_dir/current/*
 	mv $output_dir/next/* "$output_dir/current"
