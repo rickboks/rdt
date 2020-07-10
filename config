@@ -6,6 +6,5 @@ password="myverysecurepassword" # Reddit user password
 redirect_uri="http://localhost:8080" # Redirect URI for your client. Same one as you filled in when registering your app
 browser="firefox" # Browser that will be used for authenication
 user_agent="My reddit client, version 1.0" # Some description that uniquely identifies your client
-limit=20 # Number of posts per page, max 100
-timeout=60 # Timeout for downloading large videos (seconds)
+limit=25 # Number of posts per page, max 100
 save_dir="$HOME/rdt-saved" # Directory in which to put saved media
