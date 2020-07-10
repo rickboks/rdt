@@ -8,7 +8,7 @@ pidfile="$output_dir/pidfile"
 
 ydl_download(){
 	local title="$2"
-	youtube-dl --max-filesize 1000m -q -o "${download_dir}/${title}" "$1" 2> /dev/null
+	youtube-dl -q -o "${download_dir}/${title}" "$1" 2> /dev/null
 	return $?
 }
 
@@ -105,8 +105,7 @@ download_next_page(){
 	[ -n "$after" ] && get_posts_url="${get_posts_url}&after=$after"
 
 	local json=$(curl -s -S -H "Authorization: ${token_type} ${access_token}" -A "${user_agent}" "$get_posts_url")
-
-	local error=$(jq -r ".error" <<< "$json")
+	local error=$(jq -r ".error" <<< "$json" 2> /dev/null || echo "this subreddit probably doesn't exist") 
 	if [ "$error" != "null" ]; then
 		echo "Error: $error"
 		exit
@@ -162,29 +161,40 @@ prepare_directories(){
 }
 
 cleanup() {
+	echo "Cleaning up ..."
 	[ -n "$buffer_pid" ] && kill -9 "$buffer_pid" &>/dev/null
 	cat "$pidfile" | xargs kill -9 &>/dev/null
-	rm -rf "$output_dir"
-	exit
+	rm -r $output_dir
 }
 
 ask_listing(){
 	listing="$(printf 'hot\nnew\nrising\ntop\ncontroversial' | dmenu)"
-	if [ "$listing" = top -o "$listing" = "controversial" ]; then
+	case "$listing" in
+		hot | new | rising | top | controversial) : ;;
+		*) echo "Invalid selection: $listing"; exit ;;
+	esac
+	if [ "$listing" = top ] || [ "$listing" = "controversial" ]; then
 			period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
+			case "$period" in
+				all | year | month | week | day) : ;;
+				*) echo "Invalid selection: $period"; exit ;;
+			esac
 	fi
 }
 
 ask_subreddit(){
-	if [ \( -n "$1" \) ]; then
+	if [ -n "$1" ]; then
  		subreddit="$1" 
 	else 
 		subreddit="$(cat "${RDT_DIR}/subs" | dmenu)"
 	fi
 }
 
-trap "cleanup" INT
-[ \( -n "$1" \) -a \( "$1" = "auth" \) ] && auth && exit
+trap "cleanup; exit" INT
+
+if [ -n "$1" ] && [ "$1" = "auth" ]; then
+	auth; exit
+fi
 
 ask_subreddit "$1"
 ask_listing
@@ -204,7 +214,7 @@ while [ "$done" = false ]; do
 	if [ "$mpv_output" = "quit" ]; then
 		done=true
 		echo "Exiting."
-		cleanup
+		cleanup; exit
 	fi
 
 	wait
