@@ -40,8 +40,8 @@ download_urls(){
 		done <<< $urls &  # This for-loop is run in the background
 	done
 	wait
-
-	echo "successful downloads: $(cat $success_file | wc -l)"
+	succeeded=$(<$success_file)
+	echo "> Successful downloads: $(num "$succeeded")"
 }
 
 download_url (){
