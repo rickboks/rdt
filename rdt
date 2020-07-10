@@ -164,8 +164,7 @@ prepare_directories(){
 
 cleanup() {
 	echo "Cleaning up ..."
-	pids=$(pgrep -g0 | grep -v $$)
-	kill $pids &>/dev/null
+	kill $(pgrep -g0 | grep -v $$) &>/dev/null
 	rm -r $output_dir
 }
 
