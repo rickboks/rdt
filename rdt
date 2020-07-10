@@ -1,6 +1,5 @@
 #!/bin/bash
 source "$RDT_DIR/config" || exit
-download_dir=
 session_string="$RANDOM$RANDOM$RANDOM$RANDOM"
 output_dir="/tmp/rdt/$session_string"
 scope="read"
@@ -8,7 +7,7 @@ success_file="$output_dir/success"
 
 ydl_download(){
 	local title="$2"
-	youtube-dl -q -o "${download_dir}/${title}" "$1" 2> /dev/null
+	youtube-dl -q -o "${download_dir}/${title}" "$1" 2>/dev/null
 	return $?
 }
 
@@ -37,11 +36,11 @@ download_urls(){
 					download_url "$url" "$filename" 
 					[ $? -eq 0 ] && echo "$i" >> "$success_file" && break ;;
 			esac
-		done <<< $urls &  # This for-loop is run in the background
+		done <<< $urls & # This for-loop is run in the background
 	done
 	wait
 	succeeded=$(<$success_file)
-	echo "> Successful downloads: $(num "$succeeded")"
+	echo "> Successful downloads: $(num "$succeeded")/$num"
 }
 
 download_url (){
@@ -199,10 +198,15 @@ fi
 
 ask_subreddit "$1"
 ask_listing
+
+echo "Subreddit: $subreddit"
+echo -n "Listing: $listing"
+[ -n "$period" ] && echo ", $period" || echo ""
+
 get_auth_token
 prepare_directories
 
-echo "Downloading buffer of ${limit} items."
+echo "Downloading initial buffer of ${limit} items."
 download_next_page "current"
 
 done=false
