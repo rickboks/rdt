@@ -1,13 +1,14 @@
 #!/bin/bash
 source "$RDT_DIR/config" || exit
-output_dir="/tmp/rdt"
 download_dir=
 session_string="$RANDOM$RANDOM$RANDOM$RANDOM"
+output_dir="/tmp/rdt/$session_string"
 scope="read"
+pidfile="$output_dir/pidfile"
 
 ydl_download(){
 	local title="$2"
-	timeout "$timeout" youtube-dl --max-filesize 1000m -q -o "${download_dir}/${title}" "$1" 2> /dev/null
+	youtube-dl --max-filesize 1000m -q -o "${download_dir}/${title}" "$1" 2> /dev/null
 	return $?
 }
 
@@ -16,34 +17,29 @@ num(){
 }
 
 download_urls(){
-	IFS=$'\n' read -r -d '' -a img_titles <<< "$(jq -r ".title" <<< "$1")"
-	img_urls="$(jq -r -c ".urls" <<< "$1")"
+	IFS=$'\n' read -r -d '' -a all_titles <<< "$(jq -r ".title" <<< "$1")"
+	all_urls="$(jq -r -c ".urls" <<< "$1")"
+	local num=${#all_titles[@]}
 
-	local num=${#img_titles[@]}
 	for ((i=0;i<num;i++)); do
-		echo -ne "> $((i+1))/$num\r"
 		local filename="$RANDOM-$RANDOM-$RANDOM-$RANDOM"
-		echo "${filename};${img_titles[i]}" >> "${download_dir}/titles.dat"
-
-		local urls=$(sed -n $((i+1))p <<< "$img_urls")
+		echo "${filename};${all_titles[i]}" >> "${download_dir}/titles.dat"
+		local urls=$(sed -n $((i+1))p <<< "$all_urls")
 		urls=$(jq -r '.[]' <<< "$urls")
-
 		succeeded=0
 		IFS=$'\n'; while read -r url; do
 			case "$2" in 
 				wget)
 					wget -q -O "${download_dir}/$filename" "$url"
-					[ $? -eq 0 ] && succeeded=1 && break 
-				;;
+					[ $? -eq 0 ] && succeeded=1 && break ;;
 				*)
-					download_url "$url" "$filename"
-					[ $? -eq 0 ] && succeeded=1 && break
-				;;
+					download_url "$url" "$filename" 
+					[ $? -eq 0 ] && succeeded=1 && break ;;
 			esac
-		done <<< $urls
-
-		[ $succeeded -eq 0 ] && echo "FAILED: ${img_titles[i]}"
+		done <<< $urls &  # This for-loop is run in the background
+		echo "$!" >> "$pidfile" # Write pid to file so we can kill it later, if neccesary
 	done
+	wait
 }
 
 download_url (){
@@ -52,12 +48,9 @@ download_url (){
 
 	case "$url" in
 	https://gfycat.com*)
-		download_gfycat "$url" "$title"
-	;;
-
+		download_gfycat "$url" "$title" ;;
 	*)
-		ydl_download "$url" "$title"
-	;;	
+		ydl_download "$url" "$title" ;;	
 	esac
 
 	return $?
@@ -67,7 +60,7 @@ download_gfycat(){
 	local url="$1"
 	local title="$2"
 	if ! ydl_download "$url" "$title"; then
-		redgifs_url="$(get_redgifs_mp4_url "$url")"
+		get_redgifs_url "$url"
 		ydl_download "$redgifs_url" "$title"
 		return $?
 	fi
@@ -75,11 +68,10 @@ download_gfycat(){
 	return 0 
 }
 
-get_redgifs_mp4_url() {
+get_redgifs_url() {
 	local url="$1"
 	local id=${url##*\/}
-	url=$(curl "https://api.redgifs.com/v1/gfycats/$id" 2> /dev/null | jq -r ".gfyItem.webmUrl")
-	echo "$url"
+	redgifs_url=$(curl "https://api.redgifs.com/v1/gfycats/$id" 2> /dev/null | jq -r ".gfyItem.webmUrl")
 }
 
 auth(){
@@ -90,14 +82,21 @@ auth(){
 	eval "$browser \"$auth_url\""
 }
 
-get_token(){
+get_auth_token(){
+	echo "Getting authentication token ..."
+	temp=$(curl -X POST -d "grant_type=password&username=${username}&password=${password}"\
+		--user "${client_id}:${client_sec}" -A "${user_agent}" https://www.reddit.com/api/v1/access_token 2> /dev/null)
+	auth_error=$(jq -r ".error" <<< "$temp")
+	if [ "$auth_error" != "null" ]; then
+		echo "Authentication error: $auth_error"
+		exit
+	fi
 	access_token="$(jq -r ".access_token" <<< $temp)"
 	token_type="$(jq -r ".token_type" <<< $temp)"
 }
 
 download_next_page(){
 	download_dir="$output_dir/$1"
-	rm -rf ${download_dir}/*
 
 	local get_posts_url="https://oauth.reddit.com/r/${subreddit}/${listing}?raw_json=1&limit=${limit}"
 	[ "$listing" = "top" -o "$listing" = "controversial" ] && get_posts_url="$get_posts_url&t=${period}"
@@ -119,12 +118,11 @@ download_next_page(){
 	local images=$(jq -c -r ". | 
 		select ( .post_hint == \"image\" ) | {title: .title,
 			urls: [
-			(if  .preview.images[].variants.mp4.source.url then
-			 .preview.images[].variants.mp4.source.url 
-			elif .preview.images[].variants.gif.source.url then
-			 .preview.images[].variants.gif.source.url 
-			else .preview.images[].source.url end)
-				]} " <<< "$posts")
+				(if  .preview.images[].variants.mp4.source.url then
+				 .preview.images[].variants.mp4.source.url 
+				elif .preview.images[].variants.gif.source.url then
+				 .preview.images[].variants.gif.source.url 
+				else .preview.images[].source.url end) ]} " <<< "$posts")
 
 	local hosted_videos=$(jq -c -r ". | 
 		select ( .post_hint == \"hosted:video\" ) | {title: .title,
@@ -132,73 +130,87 @@ download_next_page(){
 
 	local rich_videos=$(jq -c -r ". | 
 		select ( .post_hint == \"rich:video\" ) | {title: .title,
-			urls: ([
+			urls: [
 					(if .preview.reddit_video_preview.fallback_url then (\"https://reddit.com/\" + .id) else null end),
-					.url
-					] | map(select(.!= null)))
-			 }" <<< "$posts")
+					.url] | map(select(.!= null)) }" <<< "$posts")
 
 	local links=$(jq -c -r ". | 
 		select ( .post_hint == \"link\" )| {title: .title, 
 			urls: [
-			( if .preview.reddit_video_preview.fallback_url then
+				(if .preview.reddit_video_preview.fallback_url then
 					(\"https://reddit.com/\" + .id)
 				elif (.url | test(\"https?://imgur.com\")) and .preview.images[].source.url then
 					 .preview.images[].source.url
 				else
 					 .url end)]}" <<< "$posts")
 
-	echo "Downloading $(num "$images") images ..."; download_urls "$images" "wget"
-	echo "Downloading $(num "$hosted_videos") hosted videos ..."; download_urls "$hosted_videos" "ydl"
-	echo "Downloading $(num "$rich_videos") rich videos ..."; download_urls "$rich_videos" "ydl"
-	echo "Downloading $(num "$links") links ..."; download_urls "$links" "ydl"
+	videos_combined="$(printf "%s\n%s\n%s" "${hosted_videos}" "${rich_videos}" "${links}" | grep -v "^$")"
+	num_images=$(num "$images")
+	num_videos=$(num "$videos_combined")
+
+	[ $num_images -gt 0 ] && (echo "Downloading ${num_images} images ..."; download_urls "$images" "wget")
+	[ $num_videos -gt 0 ] && (echo "Downloading ${num_videos} videos/links ..."; download_urls "$videos_combined" "ydl")
+
 	echo "Done downloading page."
 }
 
-trap "exit" INT TERM
-trap "kill 0" EXIT
+prepare_directories(){
+	[ ! -d "$save_dir" ] && mkdir -p "$save_dir"
+	rm -rf "$output_dir"
+	mkdir -p "$output_dir/current"
+	mkdir -p "$output_dir/next"
+}
 
-[ ! -d "$save_dir" ] && mkdir "$save_dir"
-[ \( -n "$1" \) -a \( "$1" = "auth" \) ] && auth && exit
-[ \( -n "$1" \) ] && subreddit="$1" || subreddit="$(cat "${RDT_DIR}/subs" | dmenu)"
-
-listing="$(printf 'hot\nnew\nrising\ntop\ncontroversial' | dmenu)"
-if [ "$listing" = top -o "$listing" = "controversial" ]; then
-		period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
-fi
-
-echo "Getting authentication token ..."
-temp=$(curl -X POST -d "grant_type=password&username=${username}&password=${password}"\
-	--user "${client_id}:${client_sec}" -A "${user_agent}" https://www.reddit.com/api/v1/access_token 2> /dev/null)
-
-auth_error=$(jq -r ".error" <<< "$temp")
-if [ "$auth_error" != "null" ]; then
-	echo "Authentication error: $auth_error"
+cleanup() {
+	[ -n "$buffer_pid" ] && kill -9 "$buffer_pid" &>/dev/null
+	cat "$pidfile" | xargs kill -9 &>/dev/null
+	rm -rf "$output_dir"
 	exit
-fi
+}
 
-get_token
+ask_listing(){
+	listing="$(printf 'hot\nnew\nrising\ntop\ncontroversial' | dmenu)"
+	if [ "$listing" = top -o "$listing" = "controversial" ]; then
+			period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
+	fi
+}
 
-rm -rf "$output_dir"
-mkdir -p "$output_dir/current"
-mkdir -p "$output_dir/next"
+ask_subreddit(){
+	if [ \( -n "$1" \) ]; then
+ 		subreddit="$1" 
+	else 
+		subreddit="$(cat "${RDT_DIR}/subs" | dmenu)"
+	fi
+}
+
+trap "cleanup" INT
+[ \( -n "$1" \) -a \( "$1" = "auth" \) ] && auth && exit
+
+ask_subreddit "$1"
+ask_listing
+get_auth_token
+prepare_directories
 
 echo "Downloading buffer of ${limit} items."
 download_next_page "current"
-done=false
+: > "$pidfile"
 
+done=false
 while [ "$done" = false ]; do
-	download_next_page "next"&
+	download_next_page "next" &
+	buffer_pid="$!"
 	mpv_output=$(python "$RDT_DIR/mpv-rdt.py" "$output_dir/current" "$save_dir" | tail -1) 
 
-	case "$mpv_output" in 
-	quit)
-		kill $(jobs -p) &>/dev/null
+	if [ "$mpv_output" = "quit" ]; then
 		done=true
-		echo "Exiting." && exit
-		;;
-	esac
+		echo "Exiting."
+		cleanup
+	fi
+
 	wait
+
+	: > "$pidfile"
+	buffer_pid=""
 
 	rm -f $output_dir/current/*
 	mv $output_dir/next/* "$output_dir/current"
