@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Load config file
 source "$RDT_DIR/config" || exit
 
@@ -26,7 +25,7 @@ download_urls(){
 
 	for ((i=0;i<num;i++)); do
 		local filename="$RANDOM-$RANDOM-$RANDOM-$RANDOM"
-		echo "${filename};${all_titles[i]}" >> "${download_dir}/titles.dat"
+		[ -z "$scrape" ] && echo "${filename};${all_titles[i]}" >> "${download_dir}/titles.dat"
 		local urls=$(sed -n $((i+1))p <<< "$all_urls")
 		urls=$(jq -r '.[]' <<< "$urls")
 		IFS=$'\n'; while read -r url; do
@@ -100,7 +99,7 @@ get_auth_token(){
 }
 
 download_next_page(){
-	download_dir="$output_dir/$1"
+	download_dir="$1"
 
 	local get_posts_url="https://oauth.reddit.com/r/${subreddit}/${listing}?raw_json=1&limit=${limit}"
 	[ "$listing" = "top" -o "$listing" = "controversial" ] && get_posts_url="$get_posts_url&t=${period}"
@@ -166,6 +165,7 @@ prepare_directories(){
 	rm -rf "$output_dir"
 	mkdir -p "$output_dir/current"
 	mkdir -p "$output_dir/next"
+	mkdir -p "$output_dir/scraped"
 }
 
 cleanup() {
@@ -196,14 +196,54 @@ ask_subreddit(){
 	subreddit="$(cat "${RDT_DIR}/subs" | dmenu)" 
 }
 
+browse(){
+	local done=false
+	while [ "$done" = false ]; do
+		download_next_page "$output_dir/next" &
+		local mpv_output=$(python "$RDT_DIR/mpv-rdt.py" "$output_dir/current" "$save_dir" | tail -1) 
+
+		if [ "$mpv_output" = "quit" ]; then
+			done=true
+			echo "Exiting."
+			cleanup; exit
+		fi
+
+		wait
+
+		rm -f $output_dir/current/*
+		mv $output_dir/next/* "$output_dir/current"
+	done
+}
+
+scrape(){
+	local total=$limit
+	local remaining=$limit
+	[ $remaining -gt 99 ] && limit=100
+
+	while [ $remaining -gt 0 ]; do
+		echo "Remaining: ${remaining}"
+		download_next_page "$scrape_dir"
+		remaining="$((remaining-$limit))"
+	done
+}
+
 trap "cleanup; exit" INT
 
 # Parse command line arguments
-while getopts s:p:l: opt; do
+while getopts s:p:l:n:x: opt; do
 	case "$opt" in
 		s) subreddit="$OPTARG" ;;
 		p) period="$OPTARG" ;;
 		l) listing="$OPTARG" ;;
+		n) limit="$OPTARG"
+			case "$limit" in
+				*[^0-9]*) echo "Error: $opt must be an integer"; exit
+			esac;;
+		x) 
+			scrape_dir="$OPTARG"
+			mkdir -p "$scrape_dir"
+			[ ! -d "$scrape_dir" ] && echo "Invalid output dir: $scrape_dir" && exit
+			scrape=1;;
 	esac
 done
 
@@ -221,22 +261,11 @@ echo -n "Listing: $listing"
 get_auth_token
 prepare_directories
 
-echo "Downloading initial buffer of ${limit} items."
-download_next_page "current"
-
-done=false
-while [ "$done" = false ]; do
-	download_next_page "next" &
-	mpv_output=$(python "$RDT_DIR/mpv-rdt.py" "$output_dir/current" "$save_dir" | tail -1) 
-
-	if [ "$mpv_output" = "quit" ]; then
-		done=true
-		echo "Exiting."
-		cleanup; exit
-	fi
-
-	wait
-
-	rm -f $output_dir/current/*
-	mv $output_dir/next/* "$output_dir/current"
-done
+if [ -z "$scrape" ]; then
+	echo "Downloading initial buffer of ${limit} items."
+	download_next_page "current"
+	browse
+else
+	echo "Scraping ${limit} items."
+	scrape
+fi
