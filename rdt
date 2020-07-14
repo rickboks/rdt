@@ -165,7 +165,6 @@ prepare_directories(){
 	rm -rf "$output_dir"
 	mkdir -p "$output_dir/current"
 	mkdir -p "$output_dir/next"
-	mkdir -p "$output_dir/scraped"
 }
 
 cleanup() {

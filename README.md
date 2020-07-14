@@ -1,6 +1,6 @@
 # rdt - browse Reddit media through mpv
 
-rdt is a Bash script that downloads media from your favorite subreddits and lets you browse through them in the media player [mpv](https://mpv.io). You can very simply and quickly select what to view through [dmenu](https://tools.suckless.org/dmenu/).
+rdt is a Bash script that downloads media from your favorite subreddits and lets you browse through them in the media player [mpv](https://mpv.io). You can very simply and quickly select what to view through [dmenu](https://tools.suckless.org/dmenu/). This project is under active development. More features are added frequently.
 
 ## Quick Demo
 ![Demo gif](demo.gif)
