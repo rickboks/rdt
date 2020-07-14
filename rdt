@@ -196,6 +196,9 @@ ask_subreddit(){
 }
 
 browse(){
+	echo "Downloading initial buffer of ${limit} items."
+	download_next_page "$output_dir/current"
+
 	local done=false
 	while [ "$done" = false ]; do
 		download_next_page "$output_dir/next" &
@@ -261,8 +264,6 @@ get_auth_token
 prepare_directories
 
 if [ -z "$scrape" ]; then
-	echo "Downloading initial buffer of ${limit} items."
-	download_next_page "current"
 	browse
 else
 	echo "Scraping ${limit} items."
