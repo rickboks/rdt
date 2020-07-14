@@ -27,10 +27,10 @@ def read_titles():
 @player.on_key_press('s')
 def save_file():
     if not os.path.exists(download_dir) or not os.path.isdir(download_dir):
-        player.command("show-text", "Invalid directory: {}".format(download_dir), 1*1000)
+        show_text("Invalid directory: {}".format(download_dir), 1)
         return
     copy(player.playlist_filenames[player.playlist_pos], download_dir)
-    player.command("show-text", "Saved file to {}".format(download_dir), 1*1000)
+    show_text("Saved file to {}".format(download_dir), 1)
 
 @player.on_key_press('j')
 def player_next():
@@ -63,6 +63,7 @@ def _quit():
     close()
     print("quit")
 
+# TODO: find a cleaner way to do this
 def close():
     player.playlist_clear()
     player.playlist_next(mode='force')
@@ -74,7 +75,7 @@ def show_text(text, duration):
 def display_title():
     current_filename=player.playlist_filenames[player.playlist_pos]
     current_id=current_filename.split("/")[-1].split(".")[0]
-    show_text("{}".format(titles[current_id]), 5)
+    show_text(titles[current_id], 5)
 
 read_titles()
 for f in files:

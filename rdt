@@ -1,8 +1,10 @@
 #!/bin/bash
+
+# Load config file
 source "$RDT_DIR/config" || exit
+
 session_string="$RANDOM$RANDOM$RANDOM$RANDOM"
 output_dir="/tmp/rdt/$session_string"
-scope="read"
 success_file="$output_dir/success"
 
 ydl_download(){
@@ -38,7 +40,8 @@ download_urls(){
 			esac
 		done <<< $urls & # This for-loop is run in the background
 	done
-	wait
+
+	wait # Wait for all downloads to finish before continuing
 	succeeded=$(<$success_file)
 	echo "> Successful downloads: $(num "$succeeded")/$num"
 }
@@ -78,7 +81,7 @@ get_redgifs_url() {
 auth(){
 	local auth_url="https://www.reddit.com/api/v1/authorize\
 		?client_id=${client_id}&response_type=code&state=${session_string}\
-		&redirect_uri=${redirect_uri}&duration=permanent&scope=${scope}"
+		&redirect_uri=${redirect_uri}&duration=permanent&scope=read"
 
 	eval "$browser \"$auth_url\""
 }
@@ -171,41 +174,49 @@ cleanup() {
 	rm -r $output_dir
 }
 
-ask_listing(){
-	listing="$(printf 'hot\nnew\nrising\ntop\ncontroversial' | dmenu)"
+ask_listing_and_period(){
+	[ -z "$listing" ] && listing="$(printf 'hot\nnew\nrising\ntop\ncontroversial' | dmenu)"
 	case "$listing" in
 		hot | new | rising | top | controversial) : ;;
-		*) echo "Invalid selection: $listing"; exit ;;
+		*) echo "Invalid listing: $listing"; exit ;;
 	esac
-	if [ "$listing" = top ] || [ "$listing" = "controversial" ]; then
-			period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
+
+	if [ "$listing" = "top" ] || [ "$listing" = "controversial" ]; then
+			[ -z "$period" ] && period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
 			case "$period" in
 				all | year | month | week | day) : ;;
-				*) echo "Invalid selection: $period"; exit ;;
+				*) echo "Invalid period: $period"; exit ;;
 			esac
+	else
+		period=""
 	fi
 }
 
-ask_subreddit(){
-	if [ -n "$1" ]; then
- 		subreddit="$1" 
-	else 
-		subreddit="$(cat "${RDT_DIR}/subs" | dmenu)"
-	fi
+ask_subreddit(){ 
+	subreddit="$(cat "${RDT_DIR}/subs" | dmenu)" 
 }
 
 trap "cleanup; exit" INT
+
+# Parse command line arguments
+while getopts s:p:l: opt; do
+	case "$opt" in
+		s) subreddit="$OPTARG" ;;
+		p) period="$OPTARG" ;;
+		l) listing="$OPTARG" ;;
+	esac
+done
 
 if [ -n "$1" ] && [ "$1" = "auth" ]; then
 	auth; exit
 fi
 
-ask_subreddit "$1"
-ask_listing
+[ -z "$subreddit" ] && ask_subreddit
+ask_listing_and_period
 
 echo "Subreddit: $subreddit"
 echo -n "Listing: $listing"
-[ -n "$period" ] && echo ", $period" || echo ""
+[ -n "$period" ] && echo ", $period" || echo
 
 get_auth_token
 prepare_directories
