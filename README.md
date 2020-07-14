@@ -51,3 +51,6 @@ show post title | t
 save media | s
 next page | n
 quit | q
+
+## Quick Demo
+![Demo gif](demo.gif)
