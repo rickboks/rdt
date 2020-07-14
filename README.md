@@ -44,7 +44,7 @@ The dmenu selection can be skipped by providing command line arguments:
 ```
 ./rdt -s <subreddit> -l <listing> -p <period>
 ```
-```<listing>``` is one of {hot, new, top, rising, controversial}, and ```<period>``` is one of {all, year, month, week, day}. A ```<period>``` only required for the listings ```top``` and ```controversial```.
+```<listing>``` is one of {hot, new, top, rising, controversial}, and ```<period>``` is one of {all, year, month, week, day}. A ```<period>``` is only required for the listings ```top``` and ```controversial```.
  
 The keybindings for the mpv viewer are:
 
