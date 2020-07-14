@@ -7,7 +7,7 @@ success_file="$output_dir/success"
 
 ydl_download(){
 	local title="$2"
-	youtube-dl -q -o "${download_dir}/${title}" "$1" 2>/dev/null
+	youtube-dl -q -o "${download_dir}/${title}" "$1" &>/dev/null
 	return $?
 }
 
