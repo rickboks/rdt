@@ -40,10 +40,12 @@ Now, you should be ready to use rdt. You can optionally add/remove entries in th
 ... and dmenu shows you the subreddits you have specified in the ```subs``` file. It will additionally ask you how to sort the posts (hot, new, top, etc.).
 The inital buffering may take a second, depending on the size of the media to be downloaded, but the following pages will always be downloaded in the background.
 
-To directy select the subreddit without dmenu, run:
+The dmenu selection can be skipped by providing command line arguments:
 ```
-./rdt <subreddit>
+./rdt -s <subreddit> -l <listing> -p <period>
 ```
+```<listing>``` is one of {hot, new, top, rising, controversial}, and ```<period>``` is one of {all, year, month, week, day}. A ```<period>``` only required for the listings ```top``` and ```controversial```.
+ 
 The keybindings for the mpv viewer are:
 
 Action | Key
