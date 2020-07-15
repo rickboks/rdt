@@ -155,7 +155,7 @@ download_next_page(){
 	num_videos=$(num "$videos_combined")
 
 	[ $num_images -gt 0 ] && (echo "Downloading ${num_images} images ..."; download_urls "$images" "wget")
-	[ $num_videos -gt 0 ] && (echo "Downloading ${num_videos} videos/links ..."; download_urls "$videos_combined" "ydl")
+	[ -z "$skip_videos" ] && [ $num_videos -gt 0 ] && (echo "Downloading ${num_videos} videos/links ..."; download_urls "$videos_combined" "ydl")
 
 	echo "Done downloading page."
 }
@@ -218,6 +218,7 @@ browse(){
 }
 
 scrape(){
+	echo "Scraping ${limit} items."
 	local total=$limit
 	local remaining=$limit
 	[ $remaining -gt 99 ] && limit=100
@@ -229,11 +230,37 @@ scrape(){
 	done
 }
 
+show_help(){
+	echo "Command line options:
+-h
+   Show this message.
+
+-s [subreddit]
+
+-l [listing] 
+   [listing] should be one of {hot, new, top, rising controversial}
+
+-p [period] 
+   [period] should be one of {all, year, month, week, day}
+
+-n [limit] 
+   For browsing, [limit] is the number of posts per page. 
+   For scraping, [limit] is the total number of posts to scrape.
+
+-x [directory]
+   Enable scraping mode. [directory] is the directory to download to.
+
+-V
+   Do not download videos and links.
+"
+}
+
 trap "cleanup; exit" INT
 
 # Parse command line arguments
-while getopts s:p:l:n:x: opt; do
+while getopts s:p:l:n:x:Vha opt; do
 	case "$opt" in
+	        a) auth; exit;;
 		s) subreddit="$OPTARG" ;;
 		p) period="$OPTARG" ;;
 		l) listing="$OPTARG" ;;
@@ -246,12 +273,12 @@ while getopts s:p:l:n:x: opt; do
 			mkdir -p "$scrape_dir"
 			[ ! -d "$scrape_dir" ] && echo "Invalid output dir: $scrape_dir" && exit
 			scrape=1;;
+		V)
+			skip_videos=1;;
+		h)
+			show_help; exit;;
 	esac
 done
-
-if [ -n "$1" ] && [ "$1" = "auth" ]; then
-	auth; exit
-fi
 
 [ -z "$subreddit" ] && ask_subreddit
 ask_listing_and_period
@@ -266,6 +293,5 @@ prepare_directories
 if [ -z "$scrape" ]; then
 	browse
 else
-	echo "Scraping ${limit} items."
 	scrape
 fi

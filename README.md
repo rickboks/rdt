@@ -1,6 +1,6 @@
 # rdt - browse Reddit media through mpv
 
-rdt is a Bash script that downloads media from your favorite subreddits and lets you browse through them in the media player [mpv](https://mpv.io). You can very simply and quickly select what to view through [dmenu](https://tools.suckless.org/dmenu/). This project is under active development. More features are added frequently.
+rdt is a Bash script that downloads media from your favorite subreddits and lets you browse through them in the media player [mpv](https://mpv.io). You can very simply and quickly select what to view through [dmenu](https://tools.suckless.org/dmenu/). It can also be used as a Reddit scraper. This project is under active development. More features are added frequently.
 
 ## Quick Demo
 ![Demo gif](demo.gif)
@@ -30,7 +30,7 @@ You might also want to put rdt in your PATH. Now, fill in all the fields in the 
 Once that's done, authenticate the script to use your Reddit account. This only needs to be done once.
 
 ```
-./rdt auth
+./rdt -a
 ```
 Now, you should be ready to use rdt. You can optionally add/remove entries in the ```subs``` file. This file contains the subreddits you can choose from. Simply run:
 
@@ -45,6 +45,13 @@ The dmenu selection can be skipped by providing command line arguments:
 ./rdt -s <subreddit> -l <listing> -p <period>
 ```
 ```<listing>``` is one of {hot, new, top, rising, controversial}, and ```<period>``` is one of {all, year, month, week, day}. A ```<period>``` is only required for the listings ```top``` and ```controversial```.
+
+To scrape a subreddit instead of browsing it, use the ```-x <directory>``` flag, where ```<directory>``` is the desired output directory.
+For all available command line arguments, run:
+
+```
+./rdt -h
+```
  
 The keybindings for the mpv viewer are:
 
@@ -56,5 +63,3 @@ show post title | t
 save media | s
 next page | n
 quit | q
-
-
