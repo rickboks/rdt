@@ -63,10 +63,8 @@ def _quit():
     close()
     print("quit")
 
-# TODO: find a cleaner way to do this
 def close():
-    player.playlist_clear()
-    player.playlist_next(mode='force')
+    player.quit()
 
 def show_text(text, duration):
     player.command("show-text", text, duration*1000)

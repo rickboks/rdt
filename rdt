@@ -5,6 +5,7 @@ source "$RDT_DIR/config" || exit
 session_string="$RANDOM$RANDOM$RANDOM$RANDOM"
 output_dir="/tmp/rdt/$session_string"
 success_file="$output_dir/success"
+subs_file="$RDT_DIR/subs"
 
 ydl_download(){
 	local title="$2"
@@ -192,7 +193,7 @@ ask_listing_and_period(){
 }
 
 ask_subreddit(){ 
-	subreddit="$(cat "${RDT_DIR}/subs" | dmenu)" 
+	subreddit="$(cat "$subs_file" | dmenu)" 
 }
 
 browse(){
@@ -258,7 +259,7 @@ show_help(){
 trap "cleanup; exit" INT
 
 # Parse command line arguments
-while getopts s:p:l:n:x:Vha opt; do
+while getopts s:p:l:n:x:f:Vha opt; do
 	case "$opt" in
 	        a) auth; exit;;
 		s) subreddit="$OPTARG" ;;
@@ -274,9 +275,12 @@ while getopts s:p:l:n:x:Vha opt; do
 			[ ! -d "$scrape_dir" ] && echo "Invalid output dir: $scrape_dir" && exit
 			scrape=1;;
 		V)
-			skip_videos=1;;
+		   skip_videos=1;;
 		h)
-			show_help; exit;;
+		   show_help; exit;;
+	    f) 
+		   subs_file="$OPTARG";;
+
 	esac
 done
 
