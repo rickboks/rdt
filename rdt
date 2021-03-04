@@ -148,6 +148,7 @@ download_next_page(){
 					 .url end)]}" <<< "$posts")
 
 	local unknown=$(jq -c -r ". | select (.post_hint == null)" <<< "$posts" )
+	echo "$unknown" | grep post_hint
 	num_unknown=$(num "$unknown")
 	[ $num_unknown -gt 0 ] && echo "There are $num_unknown posts with unknown type"
 
@@ -203,7 +204,7 @@ browse(){
 	local done=false
 	while [ "$done" = false ]; do
 		download_next_page "$output_dir/next" &
-		local mpv_output=$(python "$RDT_DIR/mpv-rdt.py" "$output_dir/current" "$save_dir" | tail -1) 
+		local mpv_output=$(python "$RDT_DIR/mpv-rdt.py" "$output_dir/current" "$save_dir" 2> /dev/null | tail -1) 
 
 		if [ "$mpv_output" = "quit" ]; then
 			done=true

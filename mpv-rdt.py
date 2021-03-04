@@ -10,7 +10,7 @@ player= mpv.MPV(input_default_bindings=True,
         input_vo_keyboard=True, 
         image_display_duration="inf", 
         loop_file="inf", 
-        fullscreen=True, 
+        fullscreen=False, 
         osc=True,
         shuffle=True)
 
