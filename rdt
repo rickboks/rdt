@@ -179,19 +179,16 @@ cleanup() {
 ask_listing_and_period(){
 	[ -z "$listing" ] && listing="$(printf 'hot\nnew\nrising\ntop\ncontroversial' | dmenu)"
 	case "$listing" in
-		hot | new | rising | top | controversial) : ;;
+		hot | new | rising)
+			period="" ;;
+		top | controversial)
+			[ -z "$period" ] && period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
+			case "$period" in
+				all | year | month | week | day) : ;;
+				*) echo "Invalid period: $period"; exit ;;
+			esac ;;
 		*) echo "Invalid listing: $listing"; exit ;;
 	esac
-
-	if [ "$listing" = "top" ] || [ "$listing" = "controversial" ]; then
-		[ -z "$period" ] && period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
-		case "$period" in
-			all | year | month | week | day) : ;;
-			*) echo "Invalid period: $period"; exit ;;
-		esac
-	else
-		period=""
-	fi
 }
 
 ask_subreddit(){ 
@@ -215,8 +212,8 @@ browse(){
 
 		wait
 
-		rm -f $output_dir/current/*
-		mv $output_dir/next/* "$output_dir/current"
+		rm -f "$output_dir/current/"*
+		mv "$output_dir/next/"* "$output_dir/current"
 	done
 }
 
