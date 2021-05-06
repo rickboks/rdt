@@ -27,8 +27,7 @@ download_urls(){
 	for ((i=0;i<num;i++)); do
 		local filename="$RANDOM-$RANDOM-$RANDOM-$RANDOM"
 		[ -z "$scrape" ] && echo "${filename};${all_titles[i]}" >> "${download_dir}/titles.dat"
-		local urls=$(sed -n $((i+1))p <<< "$all_urls")
-		urls=$(jq -r '.[]' <<< "$urls")
+		local urls=$(sed -n $((i+1))p <<< "$all_urls" | jq -r '.[]')
 		IFS=$'\n'; while read -r url; do
 			case "$2" in 
 				wget)
@@ -38,7 +37,7 @@ download_urls(){
 					download_url "$url" "$filename" 
 					[ $? -eq 0 ] && echo "$i" >> "$success_file" && break ;;
 			esac
-		done <<< $urls & # This for-loop is run in the background
+		done <<< $urls & # This loop is run in the background
 	done
 
 	wait # Wait for all downloads to finish before continuing
@@ -51,10 +50,10 @@ download_url (){
 	local title="$2"
 
 	case "$url" in
-	https://gfycat.com*)
-		download_gfycat "$url" "$title" ;;
-	*)
-		ydl_download "$url" "$title" ;;	
+		https://gfycat.com*)
+			download_gfycat "$url" "$title" ;;
+		*)
+			ydl_download "$url" "$title" ;;	
 	esac
 
 	return $?
@@ -121,31 +120,33 @@ download_next_page(){
 	local images=$(jq -c -r ". | 
 		select ( .post_hint == \"image\" ) | {title: .title,
 			urls: [
-				(if  .preview.images[].variants.mp4.source.url then
-				 .preview.images[].variants.mp4.source.url 
-				elif .preview.images[].variants.gif.source.url then
-				 .preview.images[].variants.gif.source.url 
-				else .preview.images[].source.url end) ]} " <<< "$posts")
+			(if  .preview.images[].variants.mp4.source.url then
+			.preview.images[].variants.mp4.source.url 
+		elif .preview.images[].variants.gif.source.url then
+			.preview.images[].variants.gif.source.url 
+		else .preview.images[].source.url end) ]} " <<< "$posts")
 
 	local hosted_videos=$(jq -c -r ". | 
 		select ( .post_hint == \"hosted:video\" ) | {title: .title,
-			urls: [(\"https://reddit.com/\" + .id)] }" <<< "$posts")
+		urls: [(\"https://reddit.com/\" + .id)] }" <<< "$posts")
 
 	local rich_videos=$(jq -c -r ". | 
-		select ( .post_hint == \"rich:video\" ) | {title: .title,
+		select ( .post_hint == \"rich:video\" ) | {
+			title: .title,
 			urls: [
-					(if .preview.reddit_video_preview.fallback_url then (\"https://reddit.com/\" + .id) else null end),
-					.url] | map(select(.!= null)) }" <<< "$posts")
+			(if .preview.reddit_video_preview.fallback_url then (\"https://reddit.com/\" + .id) else null end),
+			.url
+			] | map(select(.!= null)) }" <<< "$posts")
 
 	local links=$(jq -c -r ". | 
 		select ( .post_hint == \"link\" )| {title: .title, 
 			urls: [
-				(if .preview.reddit_video_preview.fallback_url then
-					(\"https://reddit.com/\" + .id)
-				elif (.url | test(\"https?://imgur.com\")) and .preview.images[].source.url then
-					 .preview.images[].source.url
-				else
-					 .url end)]}" <<< "$posts")
+			(if .preview.reddit_video_preview.fallback_url then
+			(\"https://reddit.com/\" + .id)
+		elif (.url | test(\"https?://imgur.com\")) and .preview.images[].source.url then
+			.preview.images[].source.url
+		else
+			.url end)]}" <<< "$posts")
 
 	local unknown=$(jq -c -r ". | select (.post_hint == null)" <<< "$posts" )
 	echo "$unknown" | grep post_hint
@@ -183,11 +184,11 @@ ask_listing_and_period(){
 	esac
 
 	if [ "$listing" = "top" ] || [ "$listing" = "controversial" ]; then
-			[ -z "$period" ] && period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
-			case "$period" in
-				all | year | month | week | day) : ;;
-				*) echo "Invalid period: $period"; exit ;;
-			esac
+		[ -z "$period" ] && period="$(printf 'all\nyear\nmonth\nweek\nday' | dmenu)"
+		case "$period" in
+			all | year | month | week | day) : ;;
+			*) echo "Invalid period: $period"; exit ;;
+		esac
 	else
 		period=""
 	fi
@@ -201,13 +202,13 @@ browse(){
 	echo "Downloading initial buffer of ${limit} items."
 	download_next_page "$output_dir/current"
 
-	local done=false
-	while [ "$done" = false ]; do
+	local done=0
+	while [ "$done" -eq 0 ]; do
 		download_next_page "$output_dir/next" &
 		local mpv_output=$(python "$RDT_DIR/mpv-rdt.py" "$output_dir/current" "$save_dir" 2> /dev/null | tail -1) 
 
 		if [ "$mpv_output" = "quit" ]; then
-			done=true
+			done=1
 			echo "Exiting."
 			cleanup; exit
 		fi
@@ -234,26 +235,27 @@ scrape(){
 
 show_help(){
 	echo "Command line options:
+
 -h
-   Show this message.
+Show this message.
 
 -s [subreddit]
 
 -l [listing] 
-   [listing] should be one of {hot, new, top, rising controversial}
+[listing] should be one of {hot, new, top, rising controversial}
 
 -p [period] 
-   [period] should be one of {all, year, month, week, day}
+[period] should be one of {all, year, month, week, day}
 
 -n [limit] 
-   For browsing, [limit] is the number of posts per page. 
-   For scraping, [limit] is the total number of posts to scrape.
+For browsing, [limit] is the number of posts per page. 
+For scraping, [limit] is the total number of posts to scrape.
 
 -x [directory]
-   Enable scraping mode. [directory] is the directory to download to.
+Enable scraping mode. [directory] is the directory to download to.
 
 -V
-   Do not download videos and links.
+Do not download videos and links.
 "
 }
 
@@ -262,26 +264,29 @@ trap "cleanup; exit" INT
 # Parse command line arguments
 while getopts s:p:l:n:x:f:Vha opt; do
 	case "$opt" in
-	        a) auth; exit;;
+		a) auth; exit;;
 		s) subreddit="$OPTARG" ;;
 		p) period="$OPTARG" ;;
 		l) listing="$OPTARG" ;;
 		n) limit="$OPTARG"
 			case "$limit" in
 				*[^0-9]*) echo "Error: $opt must be an integer"; exit
-			esac;;
+			esac
+			;;
 		x) 
 			scrape_dir="$OPTARG"
 			mkdir -p "$scrape_dir"
 			[ ! -d "$scrape_dir" ] && echo "Invalid output dir: $scrape_dir" && exit
-			scrape=1;;
+			scrape=1
+			;;
 		V)
-		   skip_videos=1;;
+			skip_videos=1
+			;;
 		h)
-		   show_help; exit;;
-	    f) 
-		   subs_file="$OPTARG";;
-
+			show_help; exit
+			;;
+		f) 
+			subs_file="$OPTARG" ;;
 	esac
 done
 
