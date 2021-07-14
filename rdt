@@ -87,9 +87,9 @@ auth(){
 
 get_auth_token(){
 	echo "Getting authentication token ..."
-	temp=$(curl -X POST -d "grant_type=password&username=${username}&password=${password}"\
+	local temp=$(curl -X POST -d "grant_type=password&username=${username}&password=${password}"\
 		--user "${client_id}:${client_sec}" -A "${user_agent}" https://www.reddit.com/api/v1/access_token 2> /dev/null)
-	auth_error=$(jq -r ".error" <<< "$temp")
+	local auth_error=$(jq -r ".error" <<< "$temp")
 	if [ "$auth_error" != "null" ]; then
 		echo "Authentication error: $auth_error"
 		exit
@@ -114,17 +114,21 @@ download_next_page(){
 		exit
 	fi
 
-	posts=$(jq -r ".data.children[].data | del (.all_awardings)" <<< "$json")
+	local posts=$(jq -r ".data.children[].data | del (.all_awardings)" <<< "$json")
 	jq -r ".data.after" <<< "$json" > "$output_dir/after.tmp"
 
 	local images=$(jq -c -r ". | 
 		select ( .post_hint == \"image\" ) | {title: .title,
 			urls: [
-			(if  .preview.images[].variants.mp4.source.url then
-			.preview.images[].variants.mp4.source.url 
-		elif .preview.images[].variants.gif.source.url then
-			.preview.images[].variants.gif.source.url 
-		else .preview.images[].source.url end) ]} " <<< "$posts")
+			.preview.images[].variants.mp4.source.url,
+			.preview.images[].variants.gif.source.url,
+			.preview.images[].source.url
+			]} " <<< "$posts")
+
+	local gallery_images=$(jq -c -r ".title as \$title | 
+		select (.is_gallery == true) | 
+			.media_metadata[] | select(.e == \"Image\") | 
+			{title: \$title, urls : [(.p | max_by( .x ) | .u)]}" <<< "$posts" )
 
 	local hosted_videos=$(jq -c -r ". | 
 		select ( .post_hint == \"hosted:video\" ) | {title: .title,
@@ -148,15 +152,18 @@ download_next_page(){
 		else
 			.url end)]}" <<< "$posts")
 
+
 	local unknown=$(jq -c -r ". | select (.post_hint == null)" <<< "$posts" )
-	num_unknown=$(num "$unknown")
+	local num_unknown=$(num "$unknown")
 	[ $num_unknown -gt 0 ] && echo "There are $num_unknown posts with unknown type"
 
-	videos_combined="$(printf "%s\n%s\n%s" "${hosted_videos}" "${rich_videos}" "${links}" | grep -v "^$")"
-	num_images=$(num "$images")
-	num_videos=$(num "$videos_combined")
+	local videos_combined="$(printf "%s\n%s\n%s" "${hosted_videos}" "${rich_videos}" "${links}" | grep -v "^$")"
+	local images_combined="$(printf "%s\n%s" "$images" "$gallery_images")"
 
-	[ $num_images -gt 0 ] && (echo "Downloading ${num_images} images ..."; download_urls "$images" "wget")
+	local num_images=$(num "$images_combined")
+	local num_videos=$(num "$videos_combined")
+
+	[ $num_images -gt 0 ] && (echo "Downloading ${num_images} images ..."; download_urls "$images_combined" "wget")
 	[ -z "$skip_videos" ] && [ $num_videos -gt 0 ] && (echo "Downloading ${num_videos} videos/links ..."; download_urls "$videos_combined" "ydl")
 
 	echo "Done downloading page."
@@ -204,7 +211,7 @@ browse(){
 		local mpv_output=$(python "$RDT_DIR/mpv-rdt.py" "$output_dir/current" "$save_dir" 2> /dev/null | tail -1) 
 
 		if [ "$mpv_output" = "quit" ]; then
-			done=1
+			local done=1
 			echo "Exiting."
 			cleanup; exit
 		fi
