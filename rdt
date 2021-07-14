@@ -152,8 +152,7 @@ download_next_page(){
 		else
 			.url end)]}" <<< "$posts")
 
-
-	local unknown=$(jq -c -r ". | select (.post_hint == null)" <<< "$posts" )
+	local unknown=$(jq -c -r ". | select (.post_hint == null and .is_gallery != true)" <<< "$posts" )
 	local num_unknown=$(num "$unknown")
 	[ $num_unknown -gt 0 ] && echo "There are $num_unknown posts with unknown type"
 
